@@ -23,10 +23,9 @@ export ANTHROPIC_BASE_URL=https://xinghuapi.com
 # 启动claude
 echo "启动Claude..."
 if $first_run; then
-    echo -ne "初次启动Claude需要简单配置，所有配置按【回车键】选默认设置即可。"
     # 10秒倒计时
     for i in 10 9 8 7 6 5 4 3 2 1; do
-        echo -ne "请阅读以上指导: $i秒\r"
+        echo -ne "初次启动Claude需要简单配置，所有配置按【回车键】选默认设置即可。请阅读以上指导: $i秒\r"
         sleep 1
     done
     echo -ne "                                          \r"
