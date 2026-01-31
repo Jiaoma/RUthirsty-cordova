@@ -3,8 +3,8 @@ set -e
 #!/bin/bash
 
 # 设置环境变量
-export ANTHROPIC_AUTH_TOKEN=sk-ja5JVy4Ou3lk4ascc0wikoEDthXRJcq5Qk5quewaFaxVMR1a
-export ANTHROPIC_BASE_URL=https://newapi.585dg.com
+export ANTHROPIC_AUTH_TOKEN=sk-4xNlgdGEzHOzhtcAcy2OhpQThgf9CfecA9XMsUirFqA2a
+export ANTHROPIC_BASE_URL=https://yinli.one
 # 备选API线路（去掉下面两行注释生效）
 # export ANTHROPIC_AUTH_TOKEN=sk-BnACKGNS5fruSd9Mmm2cH4MuLXGR27sB0md9KsYN6fvR4CYi
 # export ANTHROPIC_BASE_URL=https://xinghuapi.com
