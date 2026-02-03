@@ -28,7 +28,9 @@ source venv/bin/activate
 
 # 安装依赖
 echo "安装Python依赖..."
-pip install -q -r backend/requirements.txt
+if ! source venv/bin/pip list 2>/dev/null | grep -q "flask"; then
+    pip install --index-url https://pypi.tuna.tsinghua.edu.cn/simple -q -r backend/requirements.txt
+fi
 
 # 检查端口是否被占用
 if lsof -Pi :5000 -sTCP:LISTEN -t >/dev/null 2>&1; then
@@ -40,9 +42,10 @@ fi
 # 启动后端服务
 echo "启动后端服务..."
 cd backend
-python3 app.py &
+python3 app.py > ../backend.log 2>&1 &
 BACKEND_PID=$!
 cd ..
+echo "后端PID: $BACKEND_PID"
 
 # 等待后端启动
 echo "等待后端服务启动..."

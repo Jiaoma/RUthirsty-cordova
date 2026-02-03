@@ -22,24 +22,43 @@ game_state = {
 def load_config():
     """加载配置文件"""
     global config
-    with open('config.json', 'r', encoding='utf-8') as f:
+    # 获取项目根目录
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    config_path = os.path.join(project_root, 'config.json')
+    with open(config_path, 'r', encoding='utf-8') as f:
         config = json.load(f)
     return config
 
 def load_case():
     """加载案例数据"""
     global case_data
-    case_file = config.get('case_file', 'cases/example_case.json')
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    case_file_relative = config.get('case_file', 'cases/example_case.json')
+    case_file = os.path.join(project_root, case_file_relative)
     with open(case_file, 'r', encoding='utf-8') as f:
         case_data = json.load(f)
     return case_data
 
 def init_openai_client():
     """初始化OpenAI客户端"""
-    return OpenAI(
-        api_key=config['openai_api_key'],
-        base_url=config['openai_api_base']
-    )
+    # 清理可能影响 OpenAI 库的环境变量
+    proxy_vars = ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy', 'ALL_PROXY', 'all_proxy']
+    saved_env = {}
+    for var in proxy_vars:
+        if var in os.environ:
+            saved_env[var] = os.environ.pop(var)
+    
+    try:
+        client = OpenAI(
+            api_key=config['openai_api_key'],
+            base_url=config['openai_api_base'],
+            http_client=None  # 不使用自定义 HTTP 客户端
+        )
+        return client
+    finally:
+        # 恢复环境变量
+        for var, val in saved_env.items():
+            os.environ[var] = val
 
 def generate_system_prompt():
     """生成系统提示词"""
@@ -163,28 +182,55 @@ def index():
 
 @app.route('/api/init', methods=['GET'])
 def init_game():
-    """初始化游戏"""
-    global game_state
+    """初始化游戏，可选指定玩家角色"""
+    global game_state, case_data
 
     load_config()
     load_case()
 
-    game_state = {
-        "current_round": 0,
-        "dialogue_history": case_data['initial_dialogue'].copy(),
-        "max_rounds": config['max_rounds']
-    }
+    # 获取可选的玩家角色列表
+    characters = case_data['characters']
 
     return jsonify({
         "success": True,
         "case": {
             "title": case_data['title'],
             "background": case_data['background'],
-            "characters": case_data['characters'],
-            "player_role": case_data['player_role'],
+            "characters": characters,
+            "default_player_role": case_data['player_role'],
             "context": case_data.get('context', '')
         },
         "initial_dialogue": case_data['initial_dialogue'],
+        "max_rounds": config['max_rounds']
+    })
+
+
+@app.route('/api/start', methods=['POST'])
+def start_game():
+    """开始游戏，指定玩家角色"""
+    global game_state, case_data
+
+    data = request.json
+    player_role = data.get('player_role')
+
+    # 验证角色是否有效
+    valid_roles = [char['name'] for char in case_data['characters']]
+    if player_role not in valid_roles:
+        return jsonify({"success": False, "error": "无效的角色"}), 400
+
+    load_config()
+
+    game_state = {
+        "current_round": 0,
+        "dialogue_history": case_data['initial_dialogue'].copy(),
+        "max_rounds": config['max_rounds'],
+        "player_role": player_role
+    }
+
+    return jsonify({
+        "success": True,
+        "player_role": player_role,
+        "current_round": 0,
         "max_rounds": config['max_rounds']
     })
 
