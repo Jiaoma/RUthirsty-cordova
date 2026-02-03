@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>团队矛盾冲突模拟器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header .subtitle {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .game-info {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .game-info h2 {
+            font-size: 20px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .game-info p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+
+        .characters {
+            display: flex;
+            gap: 15px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        .character {
+            background: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            border: 2px solid #667eea;
+            font-size: 13px;
+        }
+
+        .character.player {
+            background: #667eea;
+            color: white;
+        }
+
+        .character strong {
+            display: block;
+            margin-bottom: 3px;
+        }
+
+        .dialogue-area {
+            padding: 30px;
+            min-height: 400px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message .speaker {
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .message .content {
+            background: #f8f9fa;
+            padding: 12px 16px;
+            border-radius: 8px;
+            line-height: 1.6;
+            color: #333;
+        }
+
+        .message.player .speaker {
+            color: #764ba2;
+        }
+
+        .message.player .content {
+            background: #e8eaf6;
+        }
+
+        .options-area {
+            padding: 30px;
+            background: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .options-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .option {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .option:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        }
+
+        .option .label {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .option .content {
+            color: #333;
+            line-height: 1.5;
+            font-size: 14px;
+        }
+
+        .controls {
+            padding: 20px 30px;
+            background: white;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .round-info {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .loading::after {
+            content: '...';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+
+        .end-summary {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .end-summary h3 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+
+        .end-summary p {
+            color: #856404;
+            line-height: 1.6;
+        }
+
+        .error {
+            background: #f8d7da;
+            border: 2px solid #dc3545;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>团队矛盾冲突模拟器</h1>
+            <div class="subtitle">通过角色扮演，体验不同的沟通策略和团队协作方式</div>
+        </div>
+
+        <div id="gameInfo" class="game-info" style="display: none;">
+            <h2 id="caseTitle"></h2>
+            <p id="caseBackground"></p>
+            <p><strong>你扮演的角色：</strong><span id="playerRole"></span></p>
+            <div class="characters" id="characters"></div>
+        </div>
+
+        <div id="dialogueArea" class="dialogue-area">
+            <div class="loading">正在加载游戏</div>
+        </div>
+
+        <div id="optionsArea" class="options-area" style="display: none;">
+            <div class="options-title">请选择你的回复：</div>
+            <div class="options" id="options"></div>
+        </div>
+
+        <div class="controls">
+            <div class="round-info">
+                <span id="roundInfo">轮次: 0 / 0</span>
+            </div>
+            <div>
+                <button class="btn btn-secondary" onclick="restartGame()">重新开始</button>
+                <button class="btn btn-primary" id="nextBtn" onclick="getOptions()" style="display: none;">继续游戏</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000/api';
+        let gameState = {
+            initialized: false,
+            gameEnded: false,
+            currentRound: 0,
+            maxRounds: 10
+        };
+
+        async function initGame() {
+            try {
+                const response = await fetch(`${API_BASE}/init`);
+                const data = await response.json();
+
+                if (data.success) {
+                    gameState.initialized = true;
+                    gameState.maxRounds = data.max_rounds;
+
+                    // 显示游戏信息
+                    document.getElementById('gameInfo').style.display = 'block';
+                    document.getElementById('caseTitle').textContent = data.case.title;
+                    document.getElementById('caseBackground').textContent = data.case.background;
+                    document.getElementById('playerRole').textContent = data.case.player_role;
+
+                    // 显示角色信息
+                    const charactersDiv = document.getElementById('characters');
+                    charactersDiv.innerHTML = '';
+                    data.case.characters.forEach(char => {
+                        const charDiv = document.createElement('div');
+                        charDiv.className = 'character' + (char.name === data.case.player_role ? ' player' : '');
+                        charDiv.innerHTML = `<strong>${char.name}</strong>${char.role} - ${char.team}`;
+                        charactersDiv.appendChild(charDiv);
+                    });
+
+                    // 显示初始对话
+                    const dialogueArea = document.getElementById('dialogueArea');
+                    dialogueArea.innerHTML = '';
+                    data.initial_dialogue.forEach(msg => {
+                        addMessage(msg.speaker, msg.content, msg.speaker === data.case.player_role);
+                    });
+
+                    // 显示继续按钮
+                    document.getElementById('nextBtn').style.display = 'inline-block';
+                    updateRoundInfo();
+                } else {
+                    showError('初始化游戏失败');
+                }
+            } catch (error) {
+                showError('连接服务器失败: ' + error.message);
+            }
+        }
+
+        async function getOptions() {
+            if (gameState.gameEnded) return;
+
+            document.getElementById('nextBtn').style.display = 'none';
+            document.getElementById('optionsArea').style.display = 'block';
+            document.getElementById('options').innerHTML = '<div class="loading">AI正在生成选项</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/get_options`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    displayOptions(data.options);
+                } else {
+                    showError('获取选项失败: ' + data.error);
+                }
+            } catch (error) {
+                showError('连接服务器失败: ' + error.message);
+            }
+        }
+
+        function displayOptions(options) {
+            const optionsDiv = document.getElementById('options');
+            optionsDiv.innerHTML = '';
+
+            options.forEach(option => {
+                const optionDiv = document.createElement('div');
+                optionDiv.className = 'option';
+                optionDiv.innerHTML = `
+                    <div class="label">${option.label}</div>
+                    <div class="content">${option.content}</div>
+                `;
+                optionDiv.onclick = () => makeChoice(option.content);
+                optionsDiv.appendChild(optionDiv);
+            });
+        }
+
+        async function makeChoice(choice) {
+            document.getElementById('optionsArea').style.display = 'none';
+
+            // 添加玩家的选择
+            const playerRole = document.getElementById('playerRole').textContent;
+            addMessage(playerRole, choice, true);
+
+            // 显示加载状态
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'loading';
+            loadingDiv.textContent = 'AI正在回应';
+            loadingDiv.id = 'loadingIndicator';
+            document.getElementById('dialogueArea').appendChild(loadingDiv);
+
+            try {
+                const response = await fetch(`${API_BASE}/make_choice`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ choice })
+                });
+                const data = await response.json();
+
+                // 移除加载状态
+                const loading = document.getElementById('loadingIndicator');
+                if (loading) loading.remove();
+
+                if (data.success) {
+                    // 添加NPC回应
+                    if (data.npc_responses) {
+                        data.npc_responses.forEach(msg => {
+                            addMessage(msg.speaker, msg.content, false);
+                        });
+                    }
+
+                    gameState.currentRound = data.current_round;
+                    updateRoundInfo();
+
+                    // 检查游戏是否结束
+                    if (data.is_end || data.current_round >= data.max_rounds) {
+                        gameState.gameEnded = true;
+                        showEndSummary(data.end_summary);
+                    } else {
+                        document.getElementById('nextBtn').style.display = 'inline-block';
+                    }
+                } else {
+                    showError('处理选择失败: ' + data.error);
+                }
+            } catch (error) {
+                const loading = document.getElementById('loadingIndicator');
+                if (loading) loading.remove();
+                showError('连接服务器失败: ' + error.message);
+            }
+        }
+
+        function addMessage(speaker, content, isPlayer) {
+            const dialogueArea = document.getElementById('dialogueArea');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message' + (isPlayer ? ' player' : '');
+            messageDiv.innerHTML = `
+                <div class="speaker">${speaker}</div>
+                <div class="content">${content}</div>
+            `;
+            dialogueArea.appendChild(messageDiv);
+            dialogueArea.scrollTop = dialogueArea.scrollHeight;
+        }
+
+        function showEndSummary(summary) {
+            const dialogueArea = document.getElementById('dialogueArea');
+            const summaryDiv = document.createElement('div');
+            summaryDiv.className = 'end-summary';
+            summaryDiv.innerHTML = `
+                <h3>游戏结束</h3>
+                <p>${summary || '感谢参与本次模拟！希望通过这次体验，你能更好地理解团队协作中的沟通技巧。'}</p>
+            `;
+            dialogueArea.appendChild(summaryDiv);
+            dialogueArea.scrollTop = dialogueArea.scrollHeight;
+        }
+
+        function showError(message) {
+            const dialogueArea = document.getElementById('dialogueArea');
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.textContent = message;
+            dialogueArea.appendChild(errorDiv);
+        }
+
+        function updateRoundInfo() {
+            document.getElementById('roundInfo').textContent =
+                `轮次: ${gameState.currentRound} / ${gameState.maxRounds}`;
+        }
+
+        function restartGame() {
+            location.reload();
+        }
+
+        // 页面加载时初始化游戏
+        window.onload = initGame;
+    </script>
+</body>
+</html>

@@ -3,8 +3,8 @@ set -e
 #!/bin/bash
 
 # 设置环境变量
-export ANTHROPIC_AUTH_TOKEN=4xNlgdGEzHOzhtcAcy2OhpQThgf9CfecA9XMsUirFqA2azU6
-export ANTHROPIC_BASE_URL=https://yinli.one
+export ANTHROPIC_AUTH_TOKEN=sk-xrotiic2sde1zs1trq0iu0i16oqq8j87
+export ANTHROPIC_BASE_URL=https://claudecode.ink/claude
 # 备选API线路（去掉下面两行注释生效）
 # export ANTHROPIC_AUTH_TOKEN=sk-BnACKGNS5fruSd9Mmm2cH4MuLXGR27sB0md9KsYN6fvR4CYi
 # export ANTHROPIC_BASE_URL=https://xinghuapi.com
