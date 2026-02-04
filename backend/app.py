@@ -7,6 +7,7 @@
 
 import os
 import sys
+import glob
 
 # 启动时清理代理环境变量
 for var in ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy', 'ALL_PROXY', 'all_proxy', 'REQUESTS_TIMEOUT', 'CURL_CA_BUNDLE']:
@@ -238,6 +239,79 @@ def init_game():
         "initial_dialogue": case_data['initial_dialogue'],
         "max_rounds": config['max_rounds']
     })
+
+import glob
+
+@app.route('/api/cases', methods=['GET'])
+def list_cases():
+    """获取案例列表"""
+    try:
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        cases_dir = os.path.join(project_root, 'cases')
+        
+        cases = []
+        for filepath in glob.glob(os.path.join(cases_dir, '*.json')):
+            with open(filepath, 'r', encoding='utf-8') as f:
+                case = json.load(f)
+                filename = os.path.basename(filepath)
+                cases.append({
+                    'id': filename.replace('.json', ''),
+                    'title': case.get('title', filename),
+                    'description': case.get('background', '')[:100] + '...' if len(case.get('background', '')) > 100 else case.get('background', ''),
+                    'characters_count': len(case.get('characters', [])),
+                    'filename': filename
+                })
+        
+        return jsonify({
+            "success": True,
+            "cases": cases
+        })
+    except Exception as e:
+        log(f"获取案例列表失败: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/select_case', methods=['POST'])
+def select_case():
+    """选择案例并加载"""
+    global case_data, config
+    
+    data = request.json
+    case_filename = data.get('case_filename')
+    
+    if not case_filename:
+        return jsonify({"success": False, "error": "未指定案例"}), 400
+    
+    try:
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        case_file = os.path.join(project_root, 'cases', case_filename)
+        
+        with open(case_file, 'r', encoding='utf-8') as f:
+            case_data = json.load(f)
+        
+        load_config()
+        
+        return jsonify({
+            "success": True,
+            "case": {
+                "title": case_data['title'],
+                "background": case_data['background'],
+                "characters": case_data['characters'],
+                "default_player_role": case_data['player_role'],
+                "context": case_data.get('context', '')
+            },
+            "initial_dialogue": case_data['initial_dialogue'],
+            "max_rounds": config['max_rounds']
+        })
+    except Exception as e:
+        log(f"加载案例失败: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 
 @app.route('/api/start', methods=['POST'])

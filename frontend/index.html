@@ -29,8 +29,30 @@
         .header h1 { font-size: 24px; margin-bottom: 8px; }
         .header .subtitle { font-size: 14px; opacity: 0.9; }
         
+        /* 案例选择界面 */
+        #caseSelectScreen { padding: 40px; text-align: center; }
+        #caseSelectScreen h2 { color: #333; margin-bottom: 10px; }
+        #caseSelectScreen p { color: #666; margin-bottom: 30px; }
+        .case-list { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
+        .case-card {
+            background: #f8f9fa;
+            border: 3px solid #e9ecef;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            min-width: 250px;
+            max-width: 300px;
+            text-align: left;
+        }
+        .case-card:hover { border-color: #667eea; transform: translateY(-3px); }
+        .case-card.selected { border-color: #667eea; background: #e8eaf6; }
+        .case-card h3 { color: #667eea; margin-bottom: 10px; font-size: 16px; }
+        .case-card .desc { color: #666; font-size: 13px; line-height: 1.5; margin-bottom: 10px; }
+        .case-card .meta { color: #999; font-size: 12px; }
+        
         /* 角色选择界面 */
-        #roleSelectScreen { padding: 40px; text-align: center; }
+        #roleSelectScreen { display: none; padding: 40px; text-align: center; }
         #roleSelectScreen h2 { color: #333; margin-bottom: 20px; }
         #roleSelectScreen p { color: #666; margin-bottom: 30px; }
         .role-list { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
@@ -107,8 +129,8 @@
         }
         .btn-primary { background: #667eea; color: white; }
         .btn-primary:hover { background: #5568d3; }
+        .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
         .btn-secondary { background: #6c757d; color: white; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
         
         .loading { text-align: center; padding: 40px; color: #666; }
         .loading::after { content: ''; animation: dots 1.5s infinite; }
@@ -120,6 +142,7 @@
         
         @media (max-width: 600px) {
             .options { grid-template-columns: 1fr; }
+            .case-list { flex-direction: column; align-items: center; }
             .role-list { flex-direction: column; align-items: center; }
         }
     </style>
@@ -131,12 +154,25 @@
             <div class="subtitle">通过角色扮演，体验不同的沟通策略</div>
         </div>
         
+        <!-- 案例选择 -->
+        <div id="caseSelectScreen">
+            <h2>选择学习案例</h2>
+            <p>点击下方案例卡选择，然后点击"下一步"</p>
+            <div class="case-list" id="caseList">
+                <div class="loading">加载案例列表...</div>
+            </div>
+            <div style="margin-top: 30px;">
+                <button class="btn btn-primary" id="nextToRoleBtn" onclick="goToRoleSelect()" disabled>下一步：选择角色</button>
+            </div>
+        </div>
+        
         <!-- 角色选择 -->
         <div id="roleSelectScreen">
-            <h2>选择你要扮演的角色</h2>
+            <h2 id="selectedCaseTitle">选择你要扮演的角色</h2>
             <p>点击下方角色卡选择，然后点击"开始游戏"</p>
             <div class="role-list" id="roleList"></div>
             <div style="margin-top: 30px;">
+                <button class="btn btn-secondary" onclick="backToCaseSelect()">上一步</button>
                 <button class="btn btn-primary" id="startBtn" onclick="startGame()" disabled>开始游戏</button>
             </div>
         </div>
@@ -167,24 +203,85 @@
     
     <script>
         const API = 'http://localhost:5000/api';
-        let state = { selectedRole: null, caseData: null, round: 0, maxRounds: 10 };
+        let state = { 
+            selectedCase: null, 
+            selectedRole: null, 
+            caseData: null, 
+            round: 0, 
+            maxRounds: 10 
+        };
         
+        // 页面加载时获取案例列表
         async function init() {
             console.log('[INIT] 开始加载');
             try {
-                const resp = await fetch(API + '/init');
-                if (!resp.ok) throw new Error('API错误');
+                const resp = await fetch(API + '/cases');
                 const data = await resp.json();
-                console.log('[INIT] 数据加载成功', data.success);
+                console.log('[INIT] 案例列表:', data.success);
                 
                 if (data.success) {
-                    state.caseData = data.case;
-                    state.maxRounds = data.max_rounds;
-                    showRoleSelection(data.case.characters);
+                    showCaseSelection(data.cases);
+                } else {
+                    showError('加载案例列表失败: ' + data.error);
                 }
             } catch (e) {
                 console.error('[INIT] 错误:', e);
                 document.querySelector('.container').innerHTML = '<div class="error">加载失败: ' + e.message + '</div>';
+            }
+        }
+        
+        function showCaseSelection(cases) {
+            console.log('[CASES] 显示案例列表', cases.length);
+            const list = document.getElementById('caseList');
+            list.innerHTML = '';
+            
+            cases.forEach((c, i) => {
+                const card = document.createElement('div');
+                card.className = 'case-card';
+                card.innerHTML = '<h3>' + c.title + '</h3>' +
+                    '<div class="desc">' + (c.description || '暂无描述') + '</div>' +
+                    '<div class="meta">角色数: ' + c.characters_count + '</div>';
+                card.onclick = () => selectCase(c, card);
+                list.appendChild(card);
+            });
+        }
+        
+        function selectCase(caseInfo, card) {
+            state.selectedCase = caseInfo;
+            document.querySelectorAll('.case-card').forEach(c => c.classList.remove('selected'));
+            card.classList.add('selected');
+            document.getElementById('nextToRoleBtn').disabled = false;
+            console.log('[CASES] 选中案例:', caseInfo.title);
+        }
+        
+        async function goToRoleSelect() {
+            if (!state.selectedCase) return;
+            console.log('[ROLES] 加载角色列表');
+            
+            try {
+                const resp = await fetch(API + '/select_case', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({case_filename: state.selectedCase.filename})
+                });
+                const data = await resp.json();
+                
+                if (data.success) {
+                    state.caseData = data.case;
+                    state.maxRounds = data.max_rounds;
+                    
+                    // 切换到角色选择界面
+                    document.getElementById('caseSelectScreen').style.display = 'none';
+                    document.getElementById('roleSelectScreen').style.display = 'block';
+                    document.getElementById('selectedCaseTitle').textContent = 
+                        '案例: ' + state.caseData.title + ' - 选择角色';
+                    
+                    showRoleSelection(data.case.characters);
+                } else {
+                    showError('加载案例失败: ' + data.error);
+                }
+            } catch (e) {
+                showError('加载失败: ' + e.message);
             }
         }
         
@@ -196,7 +293,9 @@
             chars.forEach((c, i) => {
                 const card = document.createElement('div');
                 card.className = 'role-card';
-                card.innerHTML = '<h3>' + c.name + '</h3><div class="role">' + c.role + '</div><div class="team">' + c.team + '</div>';
+                card.innerHTML = '<h3>' + c.name + '</h3>' +
+                    '<div class="role">' + c.role + '</div>' +
+                    '<div class="team">' + c.team + '</div>';
                 card.onclick = () => selectRole(c, card);
                 list.appendChild(card);
             });
@@ -207,14 +306,20 @@
             document.querySelectorAll('.role-card').forEach(c => c.classList.remove('selected'));
             card.classList.add('selected');
             document.getElementById('startBtn').disabled = false;
-            console.log('[ROLES] 选中:', char.name);
+            console.log('[ROLES] 选中角色:', char.name);
+        }
+        
+        function backToCaseSelect() {
+            document.getElementById('roleSelectScreen').style.display = 'none';
+            document.getElementById('caseSelectScreen').style.display = 'block';
+            state.selectedRole = null;
+            document.getElementById('startBtn').disabled = true;
         }
         
         async function startGame() {
             if (!state.selectedRole) return;
             console.log('[START] 开始游戏', state.selectedRole);
             
-            // 调用后端
             try {
                 await fetch(API + '/start', {
                     method: 'POST',
@@ -223,17 +328,14 @@
                 });
             } catch (e) { console.log('[START] 后端调用跳过', e.message); }
             
-            // 显示游戏界面
             document.getElementById('roleSelectScreen').style.display = 'none';
             document.getElementById('gameScreen').style.display = 'block';
             
-            // 填充信息
             document.getElementById('caseTitle').textContent = state.caseData.title;
             document.getElementById('caseBackground').textContent = state.caseData.background;
             document.getElementById('playerRole').textContent = state.selectedRole;
             document.getElementById('maxRounds').textContent = state.maxRounds;
             
-            // 显示初始对话
             const dialogue = document.getElementById('dialogueArea');
             dialogue.innerHTML = '';
             
@@ -265,25 +367,26 @@
                     const optDiv = document.getElementById('options');
                     optDiv.innerHTML = '';
                     data.options.forEach(o => {
-                        optDiv.innerHTML += '<div class="option" onclick="makeChoice(\'' + o.label + '\', \'' + o.content.replace(/'/g, "\\'") + '\')">' +
+                        optDiv.innerHTML += '<div class="option" onclick="makeChoice(\'' + o.label + '\', \'' + 
+                            o.content.replace(/'/g, "\\'") + '\')">' +
                             '<div class="label">' + o.label + '</div><div class="text">' + o.content + '</div></div>';
                     });
+                } else {
+                    document.getElementById('options').innerHTML = '<div class="error">获取选项失败: ' + data.error + '</div>';
                 }
             } catch (e) {
-                document.getElementById('options').innerHTML = '<div class="error">获取选项失败: ' + e.message + '</div>';
+                document.getElementById('options').innerHTML = '<div class="error">连接失败: ' + e.message + '</div>';
             }
         }
         
         async function makeChoice(label, content) {
             document.getElementById('optionsArea').style.display = 'none';
             
-            // 显示玩家选择
             const dialogue = document.getElementById('dialogueArea');
             dialogue.innerHTML += '<div class="message player"><div class="speaker">' + state.selectedRole + '</div>' +
                 '<div class="content">' + content + '</div></div>';
             dialogue.scrollTop = dialogue.scrollHeight;
             
-            // 添加加载
             dialogue.innerHTML += '<div class="loading" id="loading">AI正在思考...</div>';
             dialogue.scrollTop = dialogue.scrollHeight;
             
@@ -298,7 +401,6 @@
                 document.getElementById('loading').remove();
                 
                 if (data.success) {
-                    // 显示NPC回应
                     if (data.npc_responses) {
                         data.npc_responses.forEach(msg => {
                             dialogue.innerHTML += '<div class="message"><div class="speaker">' + msg.speaker + '</div>' +
@@ -322,7 +424,10 @@
             }
         }
         
-        // 启动
+        function showError(msg) {
+            document.querySelector('.container').innerHTML = '<div class="error">' + msg + '</div>';
+        }
+        
         window.onload = init;
     </script>
 </body>
