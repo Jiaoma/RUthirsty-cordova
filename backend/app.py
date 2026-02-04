@@ -1,64 +1,84 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+团队矛盾冲突模拟器 - 后端服务
+增加详细日志便于调试
+"""
+
+import os
+import sys
+
+# 启动时清理代理环境变量
+for var in ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy', 'ALL_PROXY', 'all_proxy', 'REQUESTS_TIMEOUT', 'CURL_CA_BUNDLE']:
+    if var in os.environ:
+        del os.environ[var]
 
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import json
-import os
 from openai import OpenAI
 
+# 初始化Flask
 app = Flask(__name__, static_folder='../frontend', static_url_path='')
 CORS(app)
 
 # 全局变量
 config = {}
 case_data = {}
-game_state = {
-    "current_round": 0,
-    "dialogue_history": [],
-    "max_rounds": 10
-}
+game_state = {}
+
+# 调试开关
+DEBUG = True
+
+def log(msg):
+    """打印调试日志"""
+    if DEBUG:
+        print(f"[DEBUG] {msg}", file=sys.stderr)
 
 def load_config():
     """加载配置文件"""
     global config
-    # 获取项目根目录
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    config_path = os.path.join(project_root, 'config.json')
-    with open(config_path, 'r', encoding='utf-8') as f:
-        config = json.load(f)
-    return config
+    try:
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        config_path = os.path.join(project_root, 'config.json')
+        log(f"加载配置文件: {config_path}")
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+        log(f"配置加载成功: API={config.get('openai_api_base', 'N/A')[:50]}...")
+        return config
+    except Exception as e:
+        log(f"加载配置失败: {e}")
+        raise
 
 def load_case():
     """加载案例数据"""
     global case_data
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    case_file_relative = config.get('case_file', 'cases/example_case.json')
-    case_file = os.path.join(project_root, case_file_relative)
-    with open(case_file, 'r', encoding='utf-8') as f:
-        case_data = json.load(f)
-    return case_data
+    try:
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        case_file_relative = config.get('case_file', 'cases/example_case.json')
+        case_file = os.path.join(project_root, case_file_relative)
+        log(f"加载案例文件: {case_file}")
+        with open(case_file, 'r', encoding='utf-8') as f:
+            case_data = json.load(f)
+        log(f"案例加载成功: {case_data.get('title', 'N/A')}")
+        return case_data
+    except Exception as e:
+        log(f"加载案例失败: {e}")
+        raise
 
 def init_openai_client():
     """初始化OpenAI客户端"""
-    # 清理可能影响 OpenAI 库的环境变量
-    proxy_vars = ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy', 'ALL_PROXY', 'all_proxy']
-    saved_env = {}
-    for var in proxy_vars:
-        if var in os.environ:
-            saved_env[var] = os.environ.pop(var)
-    
     try:
-        client = OpenAI(
-            api_key=config['openai_api_key'],
-            base_url=config['openai_api_base'],
-            http_client=None  # 不使用自定义 HTTP 客户端
-        )
+        api_key = config.get('openai_api_key', '')
+        api_base = config.get('openai_api_base', '')
+        log(f"初始化OpenAI客户端: base={api_base[:50]}...")
+        
+        client = OpenAI(api_key=api_key, base_url=api_base)
+        log("OpenAI客户端初始化成功")
         return client
-    finally:
-        # 恢复环境变量
-        for var, val in saved_env.items():
-            os.environ[var] = val
+    except Exception as e:
+        log(f"初始化OpenAI客户端失败: {e}")
+        raise
 
 def generate_system_prompt():
     """生成系统提示词"""
@@ -100,37 +120,52 @@ def generate_system_prompt():
 
 def generate_options(dialogue_history):
     """生成对话选项"""
-    client = init_openai_client()
+    log(f"generate_options: 对话历史={len(dialogue_history)}条")
+    
+    try:
+        client = init_openai_client()
+    except Exception as e:
+        log(f"初始化OpenAI客户端失败: {e}")
+        raise Exception(f"初始化AI客户端失败: {e}")
 
     # 构建对话历史
     history_text = "\n".join([
         f"{msg['speaker']}: {msg['content']}"
         for msg in dialogue_history
     ])
+    log(f"构建对话历史完成，共{len(history_text)}字符")
 
     user_prompt = f"""当前对话历史：
 {history_text}
 
-请为玩家（{case_data['player_role']}）生成4个可选的回复选项。这些选项应该：
+请为玩家（{case_data.get('player_role', '未知')}）生成4个可选的回复选项。这些选项应该：
 1. 反映不同的沟通策略（如：合作、防御、质疑、建设性等）
 2. 有不同的情绪强度
 3. 符合角色的性格特点
 4. 可以直接复制到聊天软件中使用
 
-当前是第{game_state['current_round']}轮，最多{game_state['max_rounds']}轮。
+当前是第{game_state.get('current_round', 0)}轮，最多{game_state.get('max_rounds', 10)}轮。
 """
 
-    response = client.chat.completions.create(
-        model=config['model'],
-        messages=[
-            {"role": "system", "content": generate_system_prompt()},
-            {"role": "user", "content": user_prompt}
-        ],
-        temperature=config['temperature'],
-        response_format={"type": "json_object"}
-    )
-
-    return json.loads(response.choices[0].message.content)
+    try:
+        log(f"调用AI API，模型={config.get('model', 'N/A')}")
+        response = client.chat.completions.create(
+            model=config.get('model', 'gpt-4'),
+            messages=[
+                {"role": "system", "content": generate_system_prompt()},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=config.get('temperature', 0.8),
+            response_format={"type": "json_object"}
+        )
+        log("AI API调用成功")
+        
+        result = json.loads(response.choices[0].message.content)
+        log(f"解析结果: {len(result.get('options', []))}个选项")
+        return result
+    except Exception as e:
+        log(f"AI API调用失败: {type(e).__name__}: {e}")
+        raise Exception(f"AI生成失败: {type(e).__name__}: {str(e)[:200]}")
 
 def generate_npc_response(player_choice, dialogue_history):
     """生成NPC回应"""
@@ -237,40 +272,63 @@ def start_game():
 @app.route('/api/get_options', methods=['POST'])
 def get_options():
     """获取对话选项"""
+    log("=== get_options 被调用 ===")
     try:
-        result = generate_options(game_state['dialogue_history'])
+        # 检查游戏状态
+        if not game_state:
+            log("错误: 游戏未初始化，请先调用 /api/init 或 /api/start")
+            return jsonify({
+                "success": False,
+                "error": "游戏未初始化，请刷新页面重试"
+            }), 400
+        
+        log(f"当前轮次: {game_state.get('current_round', 0)}/{game_state.get('max_rounds', 10)}")
+        log(f"对话历史: {len(game_state.get('dialogue_history', []))}条")
+        
+        result = generate_options(game_state.get('dialogue_history', []))
+        
+        log(f"成功生成 {len(result.get('options', []))} 个选项")
         return jsonify({
             "success": True,
             "options": result.get('options', []),
-            "round": game_state['current_round'],
-            "max_rounds": game_state['max_rounds']
+            "round": game_state.get('current_round', 0),
+            "max_rounds": game_state.get('max_rounds', 10)
         })
     except Exception as e:
+        log(f"get_options 错误: {type(e).__name__}: {e}")
         return jsonify({
             "success": False,
-            "error": str(e)
+            "error": f"生成选项失败: {str(e)[:300]}"
         }), 500
 
 @app.route('/api/make_choice', methods=['POST'])
 def make_choice():
     """玩家做出选择"""
+    log("=== make_choice 被调用 ===")
     data = request.json
     choice = data.get('choice')
 
     if not choice:
+        log("错误: 未提供选择")
         return jsonify({"success": False, "error": "未提供选择"}), 400
 
     # 添加玩家的选择到对话历史
+    player = game_state.get('player_role', case_data.get('player_role', '未知'))
+    log(f"玩家选择: {player[:20]}...")
+    
     game_state['dialogue_history'].append({
-        "speaker": case_data['player_role'],
+        "speaker": player,
         "content": choice
     })
 
     game_state['current_round'] += 1
+    log(f"当前轮次: {game_state['current_round']}/{game_state['max_rounds']}")
 
     try:
         # 生成NPC回应
+        log("调用AI生成NPC回应...")
         result = generate_npc_response(choice, game_state['dialogue_history'])
+        log(f"NPC回应生成成功: {len(result.get('npc_responses', []))}条")
 
         # 添加NPC回应到对话历史
         if 'npc_responses' in result:
@@ -287,9 +345,10 @@ def make_choice():
             "max_rounds": game_state['max_rounds']
         })
     except Exception as e:
+        log(f"make_choice 错误: {type(e).__name__}: {e}")
         return jsonify({
             "success": False,
-            "error": str(e)
+            "error": f"处理选择失败: {str(e)[:300]}"
         }), 500
 
 @app.route('/api/get_history', methods=['GET'])
