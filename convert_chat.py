@@ -13,8 +13,13 @@ def parse_chat_log(file_path):
     """
     解析聊天记录文件
     格式:
-    1 **李嘉诚(100800190)** 2025-11-03 09:30:39
+    李嘉诚（100800190） 2025-11-03 09:30:35
     消息内容...
+    
+    支持的格式变体:
+    - 李嘉诚（100800190） 2025-11-03 09:30:35
+    - 李嘉诚（100800190） 2025-11-03 10:04:4
+    - 李嘉诚（100800190） 2025-11 03 10:04:4
     """
     with open(file_path, 'r', encoding='utf-8') as f:
         content = f.read()
@@ -32,9 +37,17 @@ def parse_chat_log(file_path):
         if not line:
             continue
         
-        # 检测是否是消息头 (行号 + 发送者 + 时间)
-        # 格式: 1 **李嘉诚(100800190)** 2025-11-03 09:30:39
-        header_match = re.match(r'^\d+\s+\*\*(.+?)\((\d+)\)\*\*\s+(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})', line)
+        # 检测是否是消息头 (发送者 + 时间)
+        # 格式: 李嘉诚（100800190） 2025-11-03 09:30:35
+        # 支持中文括号（ ）和英文括号 ( )
+        # 支持时间格式: 2025-11-03 10:04:04 或 2025-11-03 10:04:4
+        # 也支持: 2025-11 03 10:04:4
+        
+        # 匹配发送者 (支持中文/英文括号)
+        header_match = re.match(
+            r'^([^\s（(]+)[（(](\d+)[）)]\s+(\d{4}[-年]?\d{1,2}[-月]?\d{1,2})[\sT](\d{1,2}:\d{1,2}(?::\d{1,2})?)',
+            line
+        )
         
         if header_match:
             # 保存上一条消息
@@ -47,12 +60,22 @@ def parse_chat_log(file_path):
             
             # 开始新消息
             current_speaker = header_match.group(1)
-            current_time = header_match.group(3) + ' ' + header_match.group(4)
+            
+            # 标准化时间格式
+            time_part = header_match.group(4)
+            time_parts = time_part.split(':')
+            if len(time_parts) == 2:
+                # 补全秒数
+                time_part += ':00'
+            
+            current_time = header_match.group(3).replace('-', '-').replace('年', '-').replace('月', '-') + ' ' + time_part
             current_content = []
         else:
             # 消息内容
             if current_speaker:
-                current_content.append(line)
+                # 过滤特殊消息类型（如【卡片消息】、［图片）等）
+                if not re.match(r'^[\s【\[\]（）()（）]+$', line):
+                    current_content.append(line)
     
     # 保存最后一条消息
     if current_speaker and current_content:
